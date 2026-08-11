@@ -9,7 +9,7 @@ interface CpuRingProps {
  * 折叠态胶囊里的 CPU 使用率圆环：
  * 占比多少，圆环就填充多少；颜色随负载变化（<50% 青、50-80% 紫、>=80% 粉红）。
  */
-export default function CpuRing({ percent, size = 22, stroke = 3 }: CpuRingProps) {
+export default function CpuRing({ percent, size = 20, stroke = 2.5 }: CpuRingProps) {
   const p = Math.min(100, Math.max(0, percent))
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r

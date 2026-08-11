@@ -79,8 +79,8 @@ export function useIslandActivity(): IslandActivity | null {
  * 无活动最窄 → 计时中等 → 音乐较宽 → 消息/AI/天气最宽。
  */
 export function capsuleWidth(mode: 'island' | 'notch', activity: IslandActivity | null): number {
-  // 各档 +36px：容纳 CPU 圆环 + 分隔线 + 间距
-  const ring = 36
+  // 各档 +30px：容纳 CPU 圆环 + 间距
+  const ring = 30
   if (!activity) return (mode === 'notch' ? 280 : 204) + ring
   if (activity.type === 'timer') return (mode === 'notch' ? 340 : 280) + ring
   if (activity.type === 'music') return (mode === 'notch' ? 380 : 320) + ring

@@ -101,18 +101,20 @@ export default function Island({
             if (activity?.target) onNavigate(activity.target as IslandScreen)
             onExpand()
           }}
-          className={`flex items-center justify-center gap-2.5 bg-island-bg transition-all duration-300 ease-island ${
+          className={`relative flex items-center justify-center gap-2.5 bg-island-bg transition-all duration-300 ease-island ${
             mode === 'notch' ? 'h-11 rounded-b-[22px] rounded-t-none' : 'h-12 rounded-full'
           } ${
             glow ? 'neon-ring neon-frame neon-glow' : ''
           } ${expanded ? 'pointer-events-none scale-90 opacity-0' : 'opacity-100'}`}
         >
           {/* 时间常驻显示 */}
+          {/* CPU 圆环：绝对定位左侧，只移动圆环，不影响时间/活动居中 */}
+          <span className="absolute left-[24px] top-1/2 -translate-y-1/2">
+            <CpuRing percent={cpu} />
+          </span>
           <span className="text-[15px] font-semibold tabular-nums tracking-wide text-island">
             {hh}:{mm}
           </span>
-          <span className="h-4 w-px bg-island-line" />
-          <CpuRing percent={cpu} />
           {activity ? (
             <>
               <span className="h-4 w-px bg-island-line" />
@@ -160,7 +162,17 @@ export default function Island({
         >
           {/* header */}
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-island-line px-4">
-            <div className="flex items-center gap-1 overflow-x-auto">
+            <div
+              className="flex items-center gap-1 overflow-x-auto"
+              onWheel={(e) => {
+                // 功能栏超出宽度时：把鼠标滚轮（垂直）转为横向滚动
+                const el = e.currentTarget
+                if (el.scrollWidth > el.clientWidth) {
+                  e.preventDefault()
+                  el.scrollLeft += e.deltaY
+                }
+              }}
+            >
               {NAV.map((n) => (
                 <button
                   key={n.id}

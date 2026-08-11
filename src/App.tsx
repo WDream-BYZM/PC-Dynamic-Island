@@ -121,6 +121,36 @@ export default function App() {
     return () => clearInterval(id)
   }, [])
 
+  // 自动更新提醒：检测到新版本 / 已下载时上岛消息提醒，点击跳转设置页
+  useEffect(() => {
+    const off = window.eisland?.onUpdateStatus((s) => {
+      if (s.state === 'available' && s.version) {
+        setActivity(
+          {
+            type: 'message',
+            title: `发现新版本 v${s.version}`,
+            subtitle: '点击前往设置更新',
+            icon: '🔄',
+            target: 'settings'
+          },
+          8000
+        )
+      } else if (s.state === 'downloaded') {
+        setActivity(
+          {
+            type: 'message',
+            title: '新版本已下载',
+            subtitle: '点击重启安装',
+            icon: '🔄',
+            target: 'settings'
+          },
+          10000
+        )
+      }
+    })
+    return () => off?.()
+  }, [])
+
   // 天气推送执行：拉取当前城市天气 → 上岛显示
   useEffect(() => {
     const push = async () => {
