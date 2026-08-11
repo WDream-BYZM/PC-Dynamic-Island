@@ -307,10 +307,15 @@ ipcMain.on('ai:chat', async (event, payload: { agent: AiAgent; messages: AiMessa
 // ---------------- 微信 / QQ 状态 ----------------
 
 function runPowershell(script: string): Promise<string> {
+  // PowerShell 5.1 默认按系统代码页（中文系统 GBK）输出到 stdout，
+  // 而 Node 按 UTF-8 解码，会导致中文变 � 占位符。
+  // 强制子进程以 UTF-8 输出，统一编码。
+  const utf8Prelude =
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', utf8Prelude + script],
       { timeout: 8000, windowsHide: true },
       (err, stdout) => {
         resolve(stdout?.toString() ?? '')
