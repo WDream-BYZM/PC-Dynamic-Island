@@ -38,6 +38,25 @@ npm start            # 以生产构建运行 · Run with production build
 > 提示 / Tip：`npm run dev` 启动后，顶部会弹出一个黑色灵动岛胶囊，点击展开；按 `Esc` 或点击面板外区域收起。
 > After `npm run dev` starts, a black capsule appears at the top center — click to expand; press `Esc` or click outside to collapse.
 
+## 发布新版本 / Release
+
+应用集成了 **electron-updater**：已安装用户在设置页可一键检查、下载并重启安装新版。发布新版本只需三步：
+
+This app integrates **electron-updater** — installed users can check, download and install new versions from the Settings screen. Releasing a new version takes 3 steps:
+
+```bash
+# 1. 修改 package.json 里的 version（如 1.2.0）· Bump "version" in package.json (e.g. 1.2.0)
+
+# 2. 一键构建 + 发布（需先安装并登录 GitHub CLI）· Build + publish with one command (requires GitHub CLI)
+powershell -ExecutionPolicy Bypass -File scripts\release.ps1
+
+# 3. 推送代码 · Push the code changes
+git add -A && git commit -m "v1.2.0: ..." && git push
+```
+
+> 说明 / Note：脚本会自动使用连字符文件名（如 `PC-Dynamic-Island-Setup-1.2.0.exe`），与 `latest.yml` 保持一致，保证应用内自动更新能正确下载。
+> The script uploads the hyphenated filename matching `latest.yml`, so in-app auto-update resolves the download correctly.
+
 ## 技术要点 / Technical Highlights
 
 - **透明置顶窗口 / Transparent always-on-top window**：`transparent + frame:false + alwaysOnTop + skipTaskbar`，常驻不退出 · Always running, never exits
