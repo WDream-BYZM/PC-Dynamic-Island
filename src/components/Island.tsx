@@ -1,6 +1,6 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import CpuRing from './CpuRing'
-import { useIslandActivity, capsuleWidth } from '../lib/activity'
+import { setActivity, useIslandActivity, capsuleWidth } from '../lib/activity'
 import { useStore } from '../lib/store'
 import { weatherStore } from '../lib/weather'
 import OverviewScreen from './screens/OverviewScreen'
@@ -12,6 +12,14 @@ import StatusScreen from './screens/StatusScreen'
 import SocialScreen from './screens/SocialScreen'
 import SearchScreen from './screens/SearchScreen'
 import SettingsScreen from './screens/SettingsScreen'
+
+/** 网速格式化：B/K/M */
+function fmtSpeed(bps: number) {
+  if (!bps) return '0'
+  if (bps >= 1024 * 1024) return `${(bps / 1024 / 1024).toFixed(1)}M`
+  if (bps >= 1024) return `${Math.round(bps / 1024)}K`
+  return `${Math.round(bps)}B`
+}
 
 export type IslandScreen =
   | 'overview'
@@ -65,20 +73,59 @@ export default function Island({
   const hh = String(now.getHours()).padStart(2, '0')
   const mm = String(now.getMinutes()).padStart(2, '0')
 
-  // 折叠态 CPU 使用率：每 2s 轮询主进程采样
+  // 折叠态 CPU 使用率：每 2s 轮询主进程采样；同时检测低电量上岛提醒
   const [cpu, setCpu] = useState(0)
+  const lowBattRef = useRef(false)
   useEffect(() => {
     let alive = true
     const tick = async () => {
       try {
         const s = await window.eisland?.getSystemStats()
-        if (alive && s) setCpu(s.cpu)
+        if (!alive || !s) return
+        setCpu(s.cpu)
+        // 低电量（<=20% 且未充电）上岛提醒一次
+        if (s.batteryPercent <= 20 && !s.charging && !lowBattRef.current) {
+          lowBattRef.current = true
+          setActivity(
+            {
+              type: 'message',
+              title: `电量低 ${s.batteryPercent}%`,
+              subtitle: '请及时充电',
+              icon: '🔋',
+              target: 'status'
+            },
+            8000
+          )
+          window.dispatchEvent(new CustomEvent('eisland:glow'))
+        } else if (s.batteryPercent > 25 || s.charging) {
+          lowBattRef.current = false
+        }
       } catch {
         /* 忽略采样失败 */
       }
     }
     tick()
     const id = setInterval(tick, 2000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [])
+
+  // 折叠态网速：每 1.5s 采样，显示在胶囊右侧
+  const [net, setNet] = useState<{ rxBps: number; txBps: number }>({ rxBps: 0, txBps: 0 })
+  useEffect(() => {
+    let alive = true
+    const tick = async () => {
+      try {
+        const s = await window.eisland?.getNetworkStats()
+        if (alive && s) setNet(s)
+      } catch {
+        /* 忽略采样失败 */
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1500)
     return () => {
       alive = false
       clearInterval(id)
@@ -133,6 +180,11 @@ export default function Island({
               <span className="max-w-[56px] truncate text-[11px] font-medium text-sub">{weather.label}</span>
             </>
           ) : null}
+          {/* 网速（右侧） */}
+          <span className="flex items-center gap-1 text-[11px] font-medium tabular-nums text-sub">
+            <span>↓{fmtSpeed(net.rxBps)}</span>
+            <span>↑{fmtSpeed(net.txBps)}</span>
+          </span>
         </button>
       </div>
 

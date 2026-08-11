@@ -38,8 +38,20 @@ function AppCard({
 export default function SocialScreen() {
   const [status, setStatus] = useState<SocialStatus | null>(null)
   const [error, setError] = useState(false)
+  const [copied, setCopied] = useState(false)
   const captures = useStore(clipboardStore)
   const unavailable = typeof window === 'undefined' || !window.eisland
+
+  // 点击历史项：复制回剪贴板
+  const copyHistory = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    } catch {
+      /* 忽略 */
+    }
+  }
 
   // 进入消息屏即视为已查看，清除上岛提示
   useEffect(() => {
@@ -104,9 +116,10 @@ export default function SocialScreen() {
       {/* 剪贴板捕获 */}
       <div className="rounded-2xl bg-island-card px-4 py-3">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-[12px] tracking-widest text-zinc-500">剪贴板捕获</span>
-          <span className="text-[11px] text-zinc-600">复制消息自动记录</span>
+          <span className="text-[12px] tracking-widest text-zinc-500">剪贴板历史</span>
+          <span className="text-[11px] text-zinc-600">点击复制回剪贴板</span>
         </div>
+        {copied && <div className="mb-2 text-[12px] text-emerald-400">✓ 已复制到剪贴板</div>}
         {captures.length === 0 ? (
           <div className="text-[12px] text-zinc-600">
             在微信 / QQ 里复制一条消息，它会出现在这里。
@@ -114,13 +127,16 @@ export default function SocialScreen() {
         ) : (
           <div className="space-y-2">
             {captures.map((c, i) => (
-              <div key={i} className="rounded-xl bg-white/5 px-3 py-2">
+              <button
+                key={i}
+                onClick={() => copyHistory(c.text)}
+                className="w-full rounded-xl bg-white/5 px-3 py-2 text-left transition-colors hover:bg-white/10"
+              >
                 <div className="mb-0.5 text-[10px] text-zinc-600">{c.time}</div>
-                <div className="whitespace-pre-wrap text-[12px] leading-relaxed text-zinc-200">
+                <div className="whitespace-pre-wrap break-all text-[12px] leading-relaxed text-zinc-200">
                   {c.text}
-                  {c.text.length >= 180 ? '…' : ''}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}

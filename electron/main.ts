@@ -223,6 +223,87 @@ function setAutoHideEnabled(enabled: boolean) {
   }
 }
 
+// ---------------- 全屏自动隐藏 ----------------
+
+let isFullscreen = false
+let fullscreenTimer: ReturnType<typeof setInterval> | null = null
+
+/** 检测前台窗口是否全屏：窗口 rect 覆盖主屏面积 ≥95% 视为全屏 */
+async function detectFullscreen(): Promise<boolean> {
+  // 枚举所有可见顶层窗口（排除桌面/任务栏/开始菜单与最大化窗口），
+  // 只要存在一个铺满屏幕（≥90%）的窗口即视为全屏。
+  // 不依赖前台窗口，规避 alwaysOnTop 的灵动岛抢占前台导致检测失效。
+  const out = await runPowershell(`
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class FsWin {
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+  [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+  [DllImport("user32.dll")] static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder sb, int max);
+  delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  public struct RECT { public int Left, Top, Right, Bottom; }
+  const int GWL_STYLE = -16;
+  const int WS_CAPTION = 0x00C00000;
+  public static string Find() {
+    var sb = new System.Text.StringBuilder(256);
+    var hits = new System.Collections.Generic.List<string>();
+    EnumWindows((h, l) => {
+      if (!IsWindowVisible(h)) return true;
+      GetClassName(h, sb, sb.Capacity);
+      string cls = sb.ToString();
+      if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd" || cls == "DV2ControlHost" || cls.StartsWith("Windows.UI.Core")) return true;
+      RECT r;
+      if (!GetWindowRect(h, out r)) return true;
+      int style = GetWindowLong(h, GWL_STYLE);
+      bool hasCaption = (style & WS_CAPTION) != 0;
+      hits.Add(r.Left + "|" + r.Top + "|" + r.Right + "|" + r.Bottom + "|" + (hasCaption ? "1" : "0"));
+      return true;
+    }, IntPtr.Zero);
+    return string.Join(";", hits);
+  }
+}
+"@
+[FsWin]::Find()
+`)
+  const d = screen.getPrimaryDisplay()
+  const scale = d.scaleFactor || 1
+  const screenArea = d.bounds.width * d.bounds.height
+  if (screenArea <= 0) return false
+  for (const line of out.split(';')) {
+    const m = /^(-?\d+)\|(-?\d+)\|(-?\d+)\|(-?\d+)\|([01])$/.exec(line.trim())
+    // 有标题栏的普通应用窗口（即使最大化）不算全屏；无标题栏且铺满屏幕 → 全屏/游戏
+    if (!m || m[5] === '1') continue
+    const w = (parseInt(m[3], 10) - parseInt(m[1], 10)) / scale
+    const h = (parseInt(m[4], 10) - parseInt(m[2], 10)) / scale
+    if ((w * h) / screenArea >= 0.9) return true
+  }
+  return false
+}
+
+/** 每秒检测一次：全屏时隐藏灵动岛，退出全屏恢复 */
+function startFullscreenWatch() {
+  if (fullscreenTimer) return
+  fullscreenTimer = setInterval(async () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    const fs = await detectFullscreen()
+    if (fs && !isFullscreen) {
+      isFullscreen = true
+      mainWindow.hide()
+      console.log('[eisland] fullscreen -> hidden')
+    } else if (!fs && isFullscreen) {
+      isFullscreen = false
+      if (!docked) {
+        mainWindow.showInactive()
+        applySize()
+      }
+      console.log('[eisland] fullscreen -> shown')
+    }
+  }, 1000)
+}
+
 // ---------------- 系统状态采样 ----------------
 
 let lastCpus = os.cpus()
@@ -311,10 +392,11 @@ ipcMain.handle('island:set-autostart', (_event, enabled: boolean) => {
 })
 
 /** 读取系统状态（CPU / 内存 / 电池 / 运行时间） */
-ipcMain.handle('system:stats', () => {
+ipcMain.handle('system:stats', async () => {
   const memTotal = os.totalmem()
   const memUsed = memTotal - os.freemem()
   const cpus = os.cpus()
+  const bat = await readBattery()
   return {
     cpu: readCpuUsage(),
     cpuModel: cpus[0]?.model ?? '',
@@ -323,6 +405,8 @@ ipcMain.handle('system:stats', () => {
     memUsed,
     memPercent: Math.round((memUsed / memTotal) * 100),
     onBattery: powerMonitor.onBatteryPower,
+    batteryPercent: bat.batteryPercent,
+    charging: bat.charging,
     uptime: os.uptime()
   }
 })
@@ -447,14 +531,161 @@ function parseMusicTitle(raw: string): { title: string; artist: string } | null 
   return { title: parts[0] ?? t, artist: '' }
 }
 
-/** 读取本地网易云音乐当前播放（通过进程主窗口标题，安全方式） */
+/** 通过系统媒体会话（SMTC）读取当前播放：标题 / 歌手 / 播放状态 */
+async function readSmtc(): Promise<{ title: string; artist: string; playing: boolean } | null> {
+  const out = await runPowershell(`
+[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime] | Out-Null
+try {
+  $mgr = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync().GetAwaiter().GetResult()
+  $session = $mgr.GetCurrentSession()
+  if (-not $session) { exit }
+  $info = $session.TryGetMediaPropertiesAsync().GetAwaiter().GetResult()
+  if (-not $info -or [string]::IsNullOrWhiteSpace($info.Title)) { exit }
+  $status = $session.GetPlaybackInfo().PlaybackStatus
+  $isPlaying = ($status -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing)
+  $enc = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($info.Title + "|" + $info.Artist)))
+  Write-Output ($enc + "|" + $isPlaying)
+} catch { }
+`)
+  const parts = out.trim().split('|')
+  if (parts.length < 2 || !parts[0]) return null
+  try {
+    const dec = Buffer.from(parts[0], 'base64').toString('utf8')
+    const idx = dec.indexOf('|')
+    const title = idx >= 0 ? dec.slice(0, idx).trim() : dec.trim()
+    const artist = idx >= 0 ? dec.slice(idx + 1).trim() : ''
+    if (!title) return null
+    return { title, artist, playing: parts[1] === 'True' }
+  } catch {
+    return null
+  }
+}
+
+/** 读取当前播放：优先系统媒体会话（含播放状态），兜底解析网易云窗口标题 */
 ipcMain.handle('music:status', async () => {
+  const smtc = await readSmtc()
+  if (smtc) return smtc
   const script = `
 $p = Get-Process cloudmusic -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 if ($p) { Write-Output $p.MainWindowTitle }
 `
   const out = (await runPowershell(script)).trim()
-  return parseMusicTitle(out)
+  const p = parseMusicTitle(out)
+  return p ? { ...p, playing: false } : null
+})
+
+/** 媒体控制：模拟系统媒体键（上一首 / 播放暂停 / 下一首），兼容各播放器 */
+ipcMain.handle('music:control', (_event, action: string) => {
+  const vk: Record<string, number> = { prev: 0xb1, toggle: 0xb3, next: 0xb0 }
+  const code = vk[action]
+  if (code === undefined) return
+  runPowershell(`
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class MediaKeys {
+  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+}
+"@
+[MediaKeys]::keybd_event(${code}, 0, 0, [UIntPtr]::Zero)
+[MediaKeys]::keybd_event(${code}, 0, 2, [UIntPtr]::Zero)
+`)
+})
+
+// ---------------- 网速采样 ----------------
+
+let lastNet = { rx: 0, tx: 0, t: 0 }
+
+/** 采样网卡收发字节数，计算实时速率（字节/秒） */
+async function sampleNetwork() {
+  const out = await runPowershell(`
+$s = Get-NetAdapterStatistics -ErrorAction SilentlyContinue | Where-Object { $_.ReceivedBytes -gt 0 -or $_.SentBytes -gt 0 }
+$rx = ($s | Measure-Object ReceivedBytes -Sum).Sum
+$tx = ($s | Measure-Object SentBytes -Sum).Sum
+Write-Output ("{0}|{1}" -f $rx, $tx)
+`)
+  const m = /^(\d+)\|(\d+)$/.exec(out.trim())
+  const now = Date.now()
+  if (!m) return { rxBps: 0, txBps: 0 }
+  const rx = parseInt(m[1], 10)
+  const tx = parseInt(m[2], 10)
+  let rxBps = 0
+  let txBps = 0
+  if (lastNet.t) {
+    const dt = (now - lastNet.t) / 1000
+    if (dt > 0) {
+      rxBps = Math.max(0, (rx - lastNet.rx) / dt)
+      txBps = Math.max(0, (tx - lastNet.tx) / dt)
+    }
+  }
+  lastNet = { rx, tx, t: now }
+  return { rxBps, txBps }
+}
+
+ipcMain.handle('network:stats', () => sampleNetwork())
+
+// ---------------- 电池 ----------------
+
+/** 读取电池电量百分比与充电状态（Win32_Battery：BatteryStatus 2=充电中） */
+async function readBattery() {
+  const out = await runPowershell(`
+$b = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
+if ($b) { Write-Output ("{0}|{1}" -f $b.EstimatedChargeRemaining, $b.BatteryStatus) }
+`)
+  const m = /^(\d+)\|(\d+)$/.exec(out.trim())
+  if (!m) return { batteryPercent: 100, charging: true }
+  return {
+    batteryPercent: parseInt(m[1], 10),
+    charging: parseInt(m[2], 10) === 2
+  }
+}
+
+// ---------------- 系统通知 ----------------
+
+/** 读取系统通知列表（需系统开启「通知访问权限」；未开启或失败时返回 available=false） */
+ipcMain.handle('notifications:list', async () => {
+  const out = await runPowershell(`
+[Windows.UI.Notifications.Management.UserNotificationListener, Windows.UI.Notifications.Management, ContentType=WindowsRuntime] | Out-Null
+try {
+  $l = [Windows.UI.Notifications.Management.UserNotificationListener]::Current
+  if ($l.AccessStatus -ne [Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus]::Allowed) {
+    Write-Output "__NOPERM__"
+    exit
+  }
+  $items = $l.GetNotificationsAsync([Windows.UI.Notifications.Management.NotificationKinds]::Unknown).GetAwaiter().GetResult()
+  foreach ($n in $items) {
+    $bindings = $n.Notification.Visual.GetBindings()
+    $texts = @()
+    foreach ($b in $bindings) {
+      $els = $b.GetTextElements()
+      foreach ($e in $els) { $texts += $e.Text }
+    }
+    if ($texts.Count -gt 0) {
+      $app = $n.AppInfo.DisplayInfo.DisplayName
+      Write-Output ("{0}|{1}|{2}" -f $n.Id, $app, ($texts -join ' '))
+    }
+  }
+} catch {
+  Write-Output "__ERR__"
+}
+`)
+  if (out.includes('__NOPERM__') || out.includes('__ERR__')) {
+    return { available: false, items: [] }
+  }
+  const items: Array<{ id: string; app: string; text: string }> = []
+  for (const line of out.split(/\r?\n/)) {
+    const idx = line.indexOf('|')
+    if (idx <= 0) continue
+    const id = line.slice(0, idx).trim()
+    const rest = line.slice(idx + 1)
+    const idx2 = rest.indexOf('|')
+    if (idx2 <= 0) continue
+    const app = rest.slice(0, idx2).trim()
+    const text = rest.slice(idx2 + 1).trim()
+    if (!id || !text) continue
+    items.push({ id, app, text: text.slice(0, 120) })
+  }
+  return { available: true, items }
 })
 
 // ---------------- 文件搜索 (Everything) ----------------
@@ -851,6 +1082,7 @@ app.whenReady().then(() => {
   ensureFirstRunAutostart()
   createWindow()
   setupAutoUpdater()
+  startFullscreenWatch()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

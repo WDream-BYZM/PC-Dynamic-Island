@@ -65,8 +65,20 @@ const api = {
   openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
   /** 通知主进程折叠态胶囊宽度（窗口按活动类型加宽） */
   setActivity: (width: number) => ipcRenderer.send('island:set-activity', width),
-  /** 读取本地网易云音乐当前播放 */
-  getMusicStatus: () => ipcRenderer.invoke('music:status') as Promise<{ title: string; artist: string } | null>,
+  /** 读取当前播放（标题 / 歌手 / 播放状态） */
+  getMusicStatus: () =>
+    ipcRenderer.invoke('music:status') as Promise<{ title: string; artist: string; playing?: boolean } | null>,
+  /** 媒体控制：prev / toggle / next */
+  musicControl: (action: 'prev' | 'toggle' | 'next') => ipcRenderer.invoke('music:control', action),
+  /** 读取实时网速（字节/秒） */
+  getNetworkStats: () =>
+    ipcRenderer.invoke('network:stats') as Promise<{ rxBps: number; txBps: number }>,
+  /** 读取系统通知列表（需开启通知访问权限；新增通知用于上岛提醒） */
+  getNotifications: () =>
+    ipcRenderer.invoke('notifications:list') as Promise<{
+      available: boolean
+      items: Array<{ id: string; app: string; text: string }>
+    }>,
   /** 文件搜索：Everything 可用性检测 */
   searchStatus: () =>
     ipcRenderer.invoke('search:status') as Promise<{

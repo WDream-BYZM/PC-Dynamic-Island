@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { SystemStats } from '../../types'
+import { useStore } from '../../lib/store'
+import { musicStore } from '../../lib/music'
 
 function fmtUptime(s: number) {
   const d = Math.floor(s / 86400)
@@ -31,6 +33,8 @@ function Bar({ value }: { value: number }) {
 export default function StatusScreen() {
   const [stats, setStats] = useState<SystemStats | null>(null)
   const [error, setError] = useState(false)
+  const music = useStore(musicStore)
+  const mediaControl = (action: 'prev' | 'toggle' | 'next') => window.eisland?.musicControl(action)
 
   useEffect(() => {
     if (!window.eisland) {
@@ -73,6 +77,51 @@ export default function StatusScreen() {
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto px-6 py-5">
+      {/* 正在播放 + 媒体控制 */}
+      {music && (
+        <div className="rounded-2xl bg-island-card px-4 py-3">
+          <div className="mb-2 text-[12px] tracking-widest text-zinc-500">正在播放</div>
+          <div className="truncate text-[14px] text-white">{music.title}</div>
+          {music.artist && <div className="truncate text-[12px] text-zinc-500">{music.artist}</div>}
+          <div className="mt-3 flex items-center justify-center gap-4">
+            <button
+              onClick={() => mediaControl('prev')}
+              className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-zinc-300 transition-colors hover:bg-white/20"
+              aria-label="上一首"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M3 3h2v10H3zM13 3l-7 5 7 5z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => mediaControl('toggle')}
+              className="neon-accent grid h-11 w-11 place-items-center rounded-full"
+              aria-label="播放/暂停"
+            >
+              {music.playing === false ? (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M4 2l10 6-10 6z" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <rect x="3.5" y="2.5" width="3.5" height="11" rx="1" />
+                  <rect x="9" y="2.5" width="3.5" height="11" rx="1" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={() => mediaControl('next')}
+              className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-zinc-300 transition-colors hover:bg-white/20"
+              aria-label="下一首"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M11 3h2v10h-2zM3 3l7 5-7 5z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* CPU */}
       <div>
         <div className="mb-2 flex items-center justify-between">
@@ -102,7 +151,11 @@ export default function StatusScreen() {
         <div>
           <div className="text-[14px] text-white">电源</div>
           <div className="text-[12px] text-zinc-500">
-            {stats.onBattery ? '正在使用电池供电' : '已接通电源'}
+            {stats.onBattery
+              ? `使用电池 · ${stats.batteryPercent}%`
+              : stats.charging
+                ? `充电中 · ${stats.batteryPercent}%`
+                : '已接通电源'}
           </div>
         </div>
         <div className="text-2xl">{stats.onBattery ? '🔋' : '🔌'}</div>

@@ -79,7 +79,7 @@ export default function App() {
           addClipboardCapture({
             id: Date.now(),
             time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            text: text.slice(0, 180)
+            text: text.slice(0, 500)
           })
           window.dispatchEvent(new CustomEvent('eisland:glow'))
           setActivity(
@@ -118,6 +118,44 @@ export default function App() {
   useEffect(() => {
     const v = localStorage.getItem('eisland.autoHide') === 'true'
     window.eisland?.setAutoHide(v)
+  }, [])
+
+  // 系统通知：检测到新通知时上岛提醒（需系统开启「通知访问权限」）
+  useEffect(() => {
+    if (!window.eisland?.getNotifications) return
+    let alive = true
+    const seen = new Set<string>()
+    const tick = async () => {
+      try {
+        const r = await window.eisland.getNotifications()
+        if (!alive || !r?.available || !r.items.length) return
+        for (const n of r.items) {
+          if (!seen.has(n.id)) {
+            seen.add(n.id)
+            if (seen.size > 100) seen.clear()
+            setActivity(
+              {
+                type: 'message',
+                title: n.app,
+                subtitle: n.text.slice(0, 20),
+                icon: '🔔',
+                target: 'social'
+              },
+              5000
+            )
+            break
+          }
+        }
+      } catch {
+        /* 忽略 */
+      }
+    }
+    tick()
+    const id = setInterval(tick, 4000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
   }, [])
 
   // 本地网易云音乐：常驻轮询，播放时上岛显示当前歌曲

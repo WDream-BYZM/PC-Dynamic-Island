@@ -6,7 +6,20 @@ export interface SystemStats {
   memUsed: number
   memPercent: number
   onBattery: boolean
+  batteryPercent: number
+  charging: boolean
   uptime: number
+}
+
+export interface NetworkStats {
+  rxBps: number
+  txBps: number
+}
+
+export interface NotificationItem {
+  id: string
+  app: string
+  text: string
 }
 
 export interface ChatMessage {
@@ -81,6 +94,9 @@ export interface EislandAPI {
   openExternal: (url: string) => void
   setActivity: (width: number) => void
   getMusicStatus: () => Promise<{ title: string; artist: string } | null>
+  musicControl: (action: 'prev' | 'toggle' | 'next') => Promise<void>
+  getNetworkStats: () => Promise<NetworkStats>
+  getNotifications: () => Promise<{ available: boolean; items: NotificationItem[] }>
   searchStatus: () => Promise<SearchStatus>
   searchFiles: (query: string) => Promise<{ method: string; error?: string; results: SearchResult[] }>
   searchOpen: (filePath: string, mode?: 'file' | 'folder' | 'everything') => void

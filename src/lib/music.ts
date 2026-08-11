@@ -3,6 +3,8 @@ import { createStore } from './store'
 export interface MusicStatus {
   title: string
   artist: string
+  /** 是否正在播放（系统媒体会话提供；缺失时视为未知） */
+  playing?: boolean
 }
 
 /** 当前网易云音乐播放信息（由 App 常驻轮询主进程更新） */
@@ -19,7 +21,7 @@ export async function refreshMusic(): Promise<void> {
     const cur = musicStore.get()
     if (!s || (!s.title && !s.artist)) {
       if (cur) musicStore.set(null)
-    } else if (!cur || cur.title !== s.title || cur.artist !== s.artist) {
+    } else if (!cur || cur.title !== s.title || cur.artist !== s.artist || cur.playing !== s.playing) {
       musicStore.set(s)
     }
   } catch {
