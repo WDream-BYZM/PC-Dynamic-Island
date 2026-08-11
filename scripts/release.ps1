@@ -64,13 +64,20 @@ $releaseExists = ($LASTEXITCODE -eq 0)
 if ($releaseExists) {
   Write-Host "警告: Release $tag 已存在！" -ForegroundColor Yellow
   Write-Host "  如需更新资产:      gh release upload $tag $exeSafe $mapSafe $latestYml --clobber"
+  Write-Host "  如需更新说明:      gh release edit $tag --notes-file release\release-notes-$version.md"
   Write-Host "  如需删除后重建:    gh release delete $tag --yes"
   exit 1
 }
 
+# ---------- 3.5 生成 Release Notes（从 CHANGELOG.md 自动提取当前版本块） ----------
+Write-Host "[3/4] 生成 Release Notes（从 CHANGELOG 提取 $version 更新内容）..." -ForegroundColor Cyan
+powershell -ExecutionPolicy Bypass -File scripts\make-release-notes.ps1 -Version $version
+if ($LASTEXITCODE -ne 0) { throw '生成 Release Notes 失败（请确认 CHANGELOG.md 已写当前版本条目）' }
+$notesFile = "release\release-notes-$version.md"
+
 # ---------- 4. 发布 ----------
 Write-Host "[4/4] 发布 $tag 到 GitHub ..." -ForegroundColor Cyan
-gh release create $tag $exeSafe $mapSafe $latestYml --title $tag --notes "PC Dynamic Island $version"
+gh release create $tag $exeSafe $mapSafe $latestYml --title $tag --notes-file $notesFile
 if ($LASTEXITCODE -ne 0) { throw '发布失败，请查看上方错误信息' }
 
 # ---------- 完成 ----------
