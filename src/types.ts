@@ -55,6 +55,19 @@ export interface SearchStatus {
   port?: number
 }
 
+export interface UpdateStatus {
+  state: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'
+  version?: string
+  message?: string
+}
+
+export interface UpdateProgress {
+  percent: number
+  transferred: number
+  total: number
+  bytesPerSecond: number
+}
+
 export interface EislandAPI {
   setIgnoreMouse: (ignore: boolean) => void
   togglePin: () => Promise<boolean>
@@ -77,6 +90,11 @@ export interface EislandAPI {
   getClipboard: () => Promise<string>
   getSocialStatus: () => Promise<SocialStatus>
   aiChat: (payload: AiChatPayload) => () => void
+  checkUpdate: () => Promise<unknown>
+  downloadUpdate: () => Promise<void>
+  installUpdate: () => Promise<void>
+  onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void
+  onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void
   platform: string
 }
 

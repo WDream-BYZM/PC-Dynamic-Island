@@ -23,10 +23,56 @@ export default function SettingsScreen() {
   const [draft, setDraft] = useState<AgentConfig | null>(null)
   const [aiSaved, setAiSaved] = useState(false)
 
+  // 自动更新状态
+  const [updateState, setUpdateState] = useState<
+    'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+  >('idle')
+  const [updateVersion, setUpdateVersion] = useState('')
+  const [updateError, setUpdateError] = useState('')
+  const [updateProgress, setUpdateProgress] = useState(0)
+
   useEffect(() => {
     window.eisland?.isPinned().then(setPinned).catch(() => {})
     window.eisland?.getAutostart().then(setAutostart).catch(() => {})
   }, [])
+
+  // 订阅自动更新事件（启动后主进程会静默检查一次）
+  useEffect(() => {
+    const offStatus = window.eisland?.onUpdateStatus((s) => {
+      if (s.state === 'checking') {
+        setUpdateState('checking')
+      } else if (s.state === 'available') {
+        setUpdateState('available')
+        setUpdateVersion(s.version ?? '')
+      } else if (s.state === 'not-available') {
+        setUpdateState('not-available')
+      } else if (s.state === 'downloaded') {
+        setUpdateState('downloaded')
+      } else if (s.state === 'error') {
+        setUpdateState('error')
+        setUpdateError(s.message ?? '更新失败，请稍后重试')
+      }
+    })
+    const offProgress = window.eisland?.onUpdateProgress((p) => {
+      setUpdateState('downloading')
+      setUpdateProgress(p.percent)
+    })
+    return () => {
+      offStatus?.()
+      offProgress?.()
+    }
+  }, [])
+
+  const checkUpdate = () => {
+    setUpdateState('checking')
+    window.eisland?.checkUpdate()
+  }
+  const downloadUpdate = () => {
+    setUpdateState('downloading')
+    setUpdateProgress(0)
+    window.eisland?.downloadUpdate()
+  }
+  const installUpdate = () => window.eisland?.installUpdate()
 
   const togglePin = async () => {
     if (!window.eisland) return
@@ -330,11 +376,93 @@ export default function SettingsScreen() {
         </div>
       </div>
 
+      {/* 软件更新 */}
+      <div className="rounded-2xl bg-island-card px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[14px] text-island">软件更新</div>
+            <div className="text-[12px] text-sub">自动检测 GitHub 上的新版本</div>
+          </div>
+          <span className="text-[11px] text-zinc-500">当前 v1.1.0</span>
+        </div>
+
+        <div className="mt-2 flex items-center gap-2">
+          {updateState === 'idle' && (
+            <button
+              onClick={checkUpdate}
+              className="flex-1 rounded-xl bg-white/10 py-2 text-[13px] text-white transition-colors hover:bg-white/15"
+            >
+              检查更新
+            </button>
+          )}
+          {updateState === 'checking' && (
+            <div className="flex-1 py-2 text-center text-[13px] text-zinc-400">正在检查更新…</div>
+          )}
+          {updateState === 'not-available' && (
+            <div className="flex flex-1 items-center gap-2">
+              <span className="flex-1 text-[13px] text-zinc-400">已是最新版本</span>
+              <button
+                onClick={checkUpdate}
+                className="rounded-lg bg-white/5 px-3 py-1.5 text-[12px] text-zinc-400 transition-colors hover:text-white"
+              >
+                再查一次
+              </button>
+            </div>
+          )}
+          {updateState === 'available' && (
+            <div className="flex flex-1 items-center gap-2">
+              <span className="flex-1 truncate text-[13px] text-[#22d3ee]">发现新版本 v{updateVersion}</span>
+              <button
+                onClick={downloadUpdate}
+                className="neon-accent shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-medium"
+              >
+                下载更新
+              </button>
+            </div>
+          )}
+          {updateState === 'downloading' && (
+            <div className="flex-1">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-[#22d3ee] transition-[width] duration-300"
+                  style={{ width: `${updateProgress}%` }}
+                />
+              </div>
+              <div className="mt-1 text-center text-[11px] tabular-nums text-zinc-500">
+                {updateProgress.toFixed(1)}%
+              </div>
+            </div>
+          )}
+          {updateState === 'downloaded' && (
+            <div className="flex flex-1 items-center gap-2">
+              <span className="flex-1 truncate text-[13px] text-[#34d399]">已下载 v{updateVersion}</span>
+              <button
+                onClick={installUpdate}
+                className="neon-accent shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-medium"
+              >
+                立即重启安装
+              </button>
+            </div>
+          )}
+          {updateState === 'error' && (
+            <div className="flex flex-1 items-center gap-2">
+              <span className="flex-1 truncate text-[12px] text-red-400">{updateError}</span>
+              <button
+                onClick={checkUpdate}
+                className="shrink-0 rounded-lg bg-white/5 px-3 py-1.5 text-[12px] text-zinc-400 transition-colors hover:text-white"
+              >
+                重试
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* 关于 */}
       <div className="rounded-2xl bg-island-card px-4 py-3">
         <div className="text-[14px] text-island">关于</div>
         <div className="mt-1 space-y-0.5 text-[12px] text-zinc-500">
-          <div>PC Dynamic Island v1.0.0 · Electron + React</div>
+          <div>PC Dynamic Island v1.1.0 · Electron + React</div>
           <button onClick={openWebsite} className="block text-island transition-colors hover:text-island-accent">
             作者：白依沚梦 · byzmovo.cn ↗
           </button>

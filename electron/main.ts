@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, ipcMain, powerMonitor, screen, shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { execFile, execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
@@ -699,9 +700,76 @@ function ensureFirstRunAutostart() {
   }
 }
 
+// ---------------- 自动更新 (electron-updater) ----------------
+
+/** 主进程 → 渲染层：发送更新状态 / 进度 */
+function sendUpdate(channel: string, payload: unknown) {
+  mainWindow?.webContents.send(channel, payload)
+}
+
+function setupAutoUpdater() {
+  // 开发模式（未打包）不做更新检查
+  if (!app.isPackaged) return
+
+  autoUpdater.autoDownload = false // 先通知渲染层，由用户决定是否下载
+  autoUpdater.autoInstallOnAppQuit = true // 下载完成后，退出应用时自动安装
+
+  autoUpdater.on('checking-for-update', () => {
+    sendUpdate('update:status', { state: 'checking' })
+  })
+  autoUpdater.on('update-available', (info) => {
+    sendUpdate('update:status', { state: 'available', version: info.version })
+  })
+  autoUpdater.on('update-not-available', () => {
+    sendUpdate('update:status', { state: 'not-available' })
+  })
+  autoUpdater.on('download-progress', (p) => {
+    sendUpdate('update:progress', {
+      percent: Math.round(p.percent * 10) / 10,
+      transferred: p.transferred,
+      total: p.total,
+      bytesPerSecond: p.bytesPerSecond
+    })
+  })
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdate('update:status', { state: 'downloaded', version: info.version })
+  })
+  autoUpdater.on('error', (err) => {
+    sendUpdate('update:status', { state: 'error', message: err?.message ?? String(err) })
+  })
+
+  // 启动后静默检查一次（延迟避免干扰首次启动）
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {
+      /* 网络异常等静默忽略 */
+    })
+  }, 15000)
+}
+
+/** 手动检查更新 */
+ipcMain.handle('update:check', () => {
+  if (!app.isPackaged) return { state: 'not-available' }
+  return autoUpdater.checkForUpdates()
+})
+
+/** 下载更新 */
+ipcMain.handle('update:download', () => {
+  if (!app.isPackaged) return
+  return autoUpdater.downloadUpdate()
+})
+
+/** 立即安装并重启 */
+ipcMain.handle('update:install', () => {
+  if (!app.isPackaged) return
+  setImmediate(() => {
+    autoUpdater.quitAndInstall(false, true)
+  })
+})
+
 app.whenReady().then(() => {
   ensureFirstRunAutostart()
   createWindow()
+  setupAutoUpdater()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

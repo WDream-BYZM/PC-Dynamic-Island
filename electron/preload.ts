@@ -32,6 +32,19 @@ export interface SocialStatus {
   qq: { running: boolean; title: string }
 }
 
+export interface UpdateStatus {
+  state: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'
+  version?: string
+  message?: string
+}
+
+export interface UpdateProgress {
+  percent: number
+  transferred: number
+  total: number
+  bytesPerSecond: number
+}
+
 const api = {
   /** 折叠态鼠标穿透控制 */
   setIgnoreMouse: (ignore: boolean) => ipcRenderer.send('island:ignore-mouse', ignore),
@@ -118,6 +131,28 @@ const api = {
       messages: payload.messages
     })
     return cleanup
+  },
+  /** 自动更新：检查更新 */
+  checkUpdate: () => ipcRenderer.invoke('update:check') as Promise<unknown>,
+  /** 自动更新：下载更新包 */
+  downloadUpdate: () => ipcRenderer.invoke('update:download') as Promise<void>,
+  /** 自动更新：立即安装并重启 */
+  installUpdate: () => ipcRenderer.invoke('update:install') as Promise<void>,
+  /** 自动更新：监听更新状态变化，返回取消订阅函数 */
+  onUpdateStatus: (callback: (status: UpdateStatus) => void) => {
+    const handler = (_e: unknown, status: UpdateStatus) => callback(status)
+    ipcRenderer.on('update:status', handler)
+    return () => {
+      ipcRenderer.removeListener('update:status', handler)
+    }
+  },
+  /** 自动更新：监听下载进度，返回取消订阅函数 */
+  onUpdateProgress: (callback: (progress: UpdateProgress) => void) => {
+    const handler = (_e: unknown, progress: UpdateProgress) => callback(progress)
+    ipcRenderer.on('update:progress', handler)
+    return () => {
+      ipcRenderer.removeListener('update:progress', handler)
+    }
   },
   platform: process.platform
 }

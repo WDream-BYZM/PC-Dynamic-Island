@@ -1,10 +1,14 @@
 {
   "name": "pc-dynamic-island",
   "productName": "PC Dynamic Island",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Dynamic Island-style desktop app for Windows, built with Electron + React + TypeScript",
   "main": "dist-electron/main.js",
   "author": "vibecoding",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WDream-BYZM/PC-Dynamic-Island.git"
+  },
   "license": "GPL-3.0",
   "private": true,
   "scripts": {
@@ -20,6 +24,13 @@
     "productName": "PC Dynamic Island",
     "asar": true,
     "electronDist": "node_modules/electron/dist",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "WDream-BYZM",
+        "repo": "PC-Dynamic-Island"
+      }
+    ],
     "directories": {
       "output": "release"
     },
@@ -50,6 +61,7 @@
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
