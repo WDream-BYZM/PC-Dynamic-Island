@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-electron
+release
+*.log
+.DS_Store
+
+# 本地环境配置与密钥
+.env
+.env.*
+!.env.example
+*.local
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
