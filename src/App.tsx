@@ -4,9 +4,10 @@ import { addClipboardCapture } from './lib/clipboardStore'
 import { setActivity, useIslandActivity, capsuleWidth } from './lib/activity'
 import { fetchCurrentWeather, duePushSlot, refreshWeather } from './lib/weather'
 import { refreshMusic } from './lib/music'
+import { ensureAudioCapture } from './lib/audioActivity'
 
 const ENTER_DELAY = 100 // 悬停展开延迟（防路过误触）
-const LEAVE_DELAY = 150 // 移出收起延迟（防面板边缘抖动）
+const LEAVE_DELAY = 220 // 移出收起延迟（需大于展开动画时长，避免抖动）
 
 export default function App() {
   const [expanded, setExpanded] = useState(false)
@@ -118,6 +119,11 @@ export default function App() {
   useEffect(() => {
     const v = localStorage.getItem('eisland.autoHide') === 'true'
     window.eisland?.setAutoHide(v)
+  }, [])
+
+  // 启动系统音频捕获（检测播放状态 + 供频谱使用）
+  useEffect(() => {
+    ensureAudioCapture()
   }, [])
 
   // 系统通知：检测到新通知时上岛提醒（需系统开启「通知访问权限」）
@@ -232,14 +238,25 @@ export default function App() {
   useEffect(() => {
     setIgnore(true)
     const onMove = (e: MouseEvent) => {
-      const target = expandedRef.current ? panelRef.current : capsuleRef.current
-      if (!target) return
-      const r = target.getBoundingClientRect()
-      const inside =
-        e.clientX >= r.left &&
-        e.clientX <= r.right &&
-        e.clientY >= r.top &&
-        e.clientY <= r.bottom
+      let inside: boolean
+      if (expandedRef.current) {
+        // 展开态：窗口贴合面板，鼠标还在窗口内就不收起，彻底避免动画期坐标变化导致抖动
+        inside =
+          e.clientX >= 0 &&
+          e.clientX <= window.innerWidth &&
+          e.clientY >= 0 &&
+          e.clientY <= window.innerHeight
+      } else {
+        const r = capsuleRef.current?.getBoundingClientRect()
+        if (!r) return
+        // 折叠态：加容差边距，鼠标在胶囊附近即展开
+        const pad = 24
+        inside =
+          e.clientX >= r.left - pad &&
+          e.clientX <= r.right + pad &&
+          e.clientY >= r.top - pad &&
+          e.clientY <= r.bottom + pad
+      }
 
       setIgnore(!inside)
 

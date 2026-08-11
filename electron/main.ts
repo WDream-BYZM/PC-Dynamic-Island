@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, ipcMain, powerMonitor, screen, shell } from 'electron'
+import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, screen, session, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { execFile, execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -537,12 +537,20 @@ async function readSmtc(): Promise<{ title: string; artist: string; playing: boo
 [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime] | Out-Null
 try {
   $mgr = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync().GetAwaiter().GetResult()
-  $session = $mgr.GetCurrentSession()
-  if (-not $session) { exit }
-  $info = $session.TryGetMediaPropertiesAsync().GetAwaiter().GetResult()
+  $sessions = $mgr.GetSessions()
+  if (-not $sessions -or $sessions.Count -eq 0) { exit }
+  # 优先选正在播放的会话，避免多个媒体源时取错
+  $target = $null
+  foreach ($s in $sessions) {
+    if ($s.GetPlaybackInfo().PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing) {
+      $target = $s
+      break
+    }
+  }
+  if (-not $target) { $target = $sessions[0] }
+  $info = $target.TryGetMediaPropertiesAsync().GetAwaiter().GetResult()
   if (-not $info -or [string]::IsNullOrWhiteSpace($info.Title)) { exit }
-  $status = $session.GetPlaybackInfo().PlaybackStatus
-  $isPlaying = ($status -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing)
+  $isPlaying = ($target.GetPlaybackInfo().PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing)
   $enc = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($info.Title + "|" + $info.Artist)))
   Write-Output ($enc + "|" + $isPlaying)
 } catch { }
@@ -1080,6 +1088,13 @@ ipcMain.handle('update:install', () => {
 
 app.whenReady().then(() => {
   ensureFirstRunAutostart()
+  // 供渲染层用 getDisplayMedia 捕获系统音频（环回）做真实频谱
+  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+    desktopCapturer
+      .getSources({ types: ['screen'] })
+      .then((sources) => callback({ video: sources[0], audio: 'loopback' }))
+      .catch(() => callback({ video: undefined, audio: 'loopback' }))
+  })
   createWindow()
   setupAutoUpdater()
   startFullscreenWatch()

@@ -1,6 +1,7 @@
 import { createStore, useStore } from './store'
 import { timerStore, formatTime } from './timerStore'
 import { musicStore } from './music'
+import { audioActivity } from './audioActivity'
 
 export type ActivityType = 'timer' | 'message' | 'ai' | 'weather' | 'music'
 
@@ -57,6 +58,7 @@ export function clearActivity(type?: ActivityType) {
 export function useIslandActivity(): IslandActivity | null {
   const timer = useStore(timerStore)
   const music = useStore(musicStore)
+  const audio = useStore(audioActivity)
   const temp = useStore(activityStore)
 
   if (timer.cdRunning) {
@@ -68,7 +70,8 @@ export function useIslandActivity(): IslandActivity | null {
   if (timer.swRunning || timer.swElapsed > 0) {
     return { type: 'timer', title: formatTime(timer.swElapsed), subtitle: '正计时', icon: '⏱️', target: 'timer' }
   }
-  if (music) {
+  // 音频捕获成功时按播放状态显示；捕获失败（analyser 为空）则降级为始终显示，避免识别失效
+  if (music && (audio.isPlaying || !audio.analyser)) {
     return { type: 'music', title: music.title, subtitle: music.artist || undefined, icon: '🎵' }
   }
   return temp
@@ -83,6 +86,14 @@ export function capsuleWidth(mode: 'island' | 'notch', activity: IslandActivity 
   const extra = 30 + 64
   if (!activity) return (mode === 'notch' ? 280 : 204) + extra
   if (activity.type === 'timer') return (mode === 'notch' ? 340 : 280) + extra
-  if (activity.type === 'music') return (mode === 'notch' ? 380 : 320) + extra
+  if (activity.type === 'music') {
+    // 歌名/歌手按长度动态撑宽（长短差异大，固定档会裁长歌名）：标题 14px≈13px/字、字幕 11px≈10px/字
+    const titleW = Math.min((activity.title?.length ?? 0) * 13, 260)
+    const subW = Math.min((activity.subtitle?.length ?? 0) * 10, 130)
+    const base = 66 // 分隔线 + 图标 + 间距 + 左右留白
+    const min = mode === 'notch' ? 380 : 320
+    const max = 800 - extra // 主进程窗口宽上限 800
+    return Math.min(max, Math.max(min, base + titleW + subW)) + extra
+  }
   return (mode === 'notch' ? 440 : 380) + extra
 }

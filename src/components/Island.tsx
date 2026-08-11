@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import CpuRing from './CpuRing'
+import MusicVisualizer from './MusicVisualizer'
 import { setActivity, useIslandActivity, capsuleWidth } from '../lib/activity'
 import { useStore } from '../lib/store'
+import { musicStore } from '../lib/music'
+import { audioActivity } from '../lib/audioActivity'
 import { weatherStore } from '../lib/weather'
 import OverviewScreen from './screens/OverviewScreen'
 import AiScreen from './screens/AiScreen'
@@ -69,6 +72,8 @@ export default function Island({
 }: IslandProps) {
   const activity = useIslandActivity()
   const weather = useStore(weatherStore)
+  const music = useStore(musicStore)
+  const audio = useStore(audioActivity)
   const now = new Date()
   const hh = String(now.getHours()).padStart(2, '0')
   const mm = String(now.getMinutes()).padStart(2, '0')
@@ -148,12 +153,13 @@ export default function Island({
             if (activity?.target) onNavigate(activity.target as IslandScreen)
             onExpand()
           }}
-          className={`relative flex items-center justify-center gap-2.5 bg-island-bg transition-all duration-300 ease-island ${
+          className={`relative flex items-center justify-center gap-2.5 overflow-hidden bg-island-bg transition-all duration-300 ease-island ${
             mode === 'notch' ? 'h-11 rounded-b-[22px] rounded-t-none' : 'h-12 rounded-full'
           } ${
             glow ? 'neon-ring neon-frame neon-glow' : ''
           } ${expanded ? 'pointer-events-none scale-90 opacity-0' : 'opacity-100'}`}
         >
+          {music && (audio.isPlaying || !audio.analyser) && <MusicVisualizer />}
           {/* CPU 圆环 + 时间：同处 flex 流，并排居中，避免重叠 */}
           <CpuRing percent={cpu} />
           <span className="text-[15px] font-semibold tabular-nums tracking-wide text-island">
@@ -163,11 +169,11 @@ export default function Island({
             <>
               <span className="h-4 w-px bg-island-line" />
               {activity.icon && <span className="text-[14px] leading-none">{activity.icon}</span>}
-              <span className="text-[14px] font-semibold tabular-nums text-island">
+              <span className="max-w-[260px] truncate text-[14px] font-semibold tabular-nums text-island">
                 {activity.title}
               </span>
               {activity.subtitle && (
-                <span className="max-w-[88px] truncate text-[11px] font-medium text-sub">
+                <span className="max-w-[130px] truncate text-[11px] font-medium text-sub">
                   {activity.subtitle}
                 </span>
               )}
