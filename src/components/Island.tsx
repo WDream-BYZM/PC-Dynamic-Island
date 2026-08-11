@@ -1,4 +1,5 @@
-import type { RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
+import CpuRing from './CpuRing'
 import { useIslandActivity, capsuleWidth } from '../lib/activity'
 import { useStore } from '../lib/store'
 import { weatherStore } from '../lib/weather'
@@ -64,6 +65,26 @@ export default function Island({
   const hh = String(now.getHours()).padStart(2, '0')
   const mm = String(now.getMinutes()).padStart(2, '0')
 
+  // 折叠态 CPU 使用率：每 2s 轮询主进程采样
+  const [cpu, setCpu] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const tick = async () => {
+      try {
+        const s = await window.eisland?.getSystemStats()
+        if (alive && s) setCpu(s.cpu)
+      } catch {
+        /* 忽略采样失败 */
+      }
+    }
+    tick()
+    const id = setInterval(tick, 2000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [])
+
   return (
     <div className="absolute inset-0">
       {/* 折叠态胶囊：悬停即展开 */}
@@ -90,6 +111,8 @@ export default function Island({
           <span className="text-[15px] font-semibold tabular-nums tracking-wide text-island">
             {hh}:{mm}
           </span>
+          <span className="h-4 w-px bg-island-line" />
+          <CpuRing percent={cpu} />
           {activity ? (
             <>
               <span className="h-4 w-px bg-island-line" />
