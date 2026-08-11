@@ -8,6 +8,16 @@ A **Dynamic Island-style desktop app for Windows**, built with Electron + React 
 
 Click the black capsule at the top center to expand it into a large panel; when collapsed, the area outside the capsule is click-through, so it never blocks other windows on your desktop.
 
+## 下载 / Download
+
+**Windows x64**（NSIS 安装包，约 80 MB）· NSIS installer (~80 MB)
+
+- [⬇️ 下载最新版 · Download latest](https://github.com/WDream-BYZM/PC-Dynamic-Island/releases/latest/download/PC%20Dynamic%20Island%20Setup%201.0.0.exe)
+- [📦 所有版本 · All releases](https://github.com/WDream-BYZM/PC-Dynamic-Island/releases)
+
+> 安装后常驻任务栏顶部中央，点击胶囊展开、按 `Esc` 或点击外部收起。
+> After install, a capsule stays at the top center; click to expand, press `Esc` or click outside to collapse.
+
 ## 功能 / Features
 
 - **总览 / Overview**：实时时钟、日期、时段问候 · Live clock, date, and time-of-day greeting
