@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AgentConfig } from '../../types'
-import { loadAgents, newAgentId, saveAgents } from '../../lib/agents'
+import { loadAgents, newAgentId, saveAgents, PROVIDERS, detectProvider, type ProviderInfo } from '../../lib/agents'
 
 const INPUT_CLS =
   'min-w-0 flex-1 rounded-xl border border-island-line bg-island-card px-3 py-2 text-[13px] text-white outline-none placeholder:text-zinc-600 focus:border-island-accent/50'
@@ -16,6 +16,8 @@ export default function SettingsScreen() {
   const [mode, setMode] = useState<'island' | 'notch'>(
     () => (localStorage.getItem('eisland.mode') as 'island' | 'notch') || 'island'
   )
+  // 闲置自动隐藏
+  const [autoHide, setAutoHide] = useState(() => localStorage.getItem('eisland.autoHide') === 'true')
 
   // AI 智能体管理
   const [agents, setAgents] = useState<AgentConfig[]>(() => loadAgents())
@@ -86,6 +88,13 @@ export default function SettingsScreen() {
     setAutostart(next)
   }
 
+  const toggleAutoHide = () => {
+    const next = !autoHide
+    setAutoHide(next)
+    localStorage.setItem('eisland.autoHide', String(next))
+    window.eisland?.setAutoHide(next)
+  }
+
   // 打开官网（Electron 用系统浏览器，浏览器预览用新窗口兜底）
   const openWebsite = () => {
     const url = 'https://byzmovo.cn'
@@ -145,6 +154,12 @@ export default function SettingsScreen() {
   const updateDraft = (patch: Partial<AgentConfig>) => {
     if (!draft) return
     setDraft({ ...draft, ...patch })
+  }
+
+  // 选择服务商：自动填充 API 端点和模型
+  const applyProvider = (p: ProviderInfo) => {
+    if (!draft) return
+    updateDraft({ baseUrl: p.defaultUrl, model: p.model })
   }
 
   const saveDraft = () => {
@@ -213,19 +228,42 @@ export default function SettingsScreen() {
 
         {draft && (
           <div className="mt-3 space-y-2 rounded-2xl bg-island-card p-3">
-            <input
-              value={draft.name}
-              onChange={(e) => updateDraft({ name: e.target.value })}
-              placeholder="名称"
-              className={INPUT_CLS}
-            />
-            <textarea
-              value={draft.systemPrompt}
-              onChange={(e) => updateDraft({ systemPrompt: e.target.value })}
-              placeholder="系统提示词"
-              rows={3}
-              className={`${INPUT_CLS} resize-none`}
-            />
+            {draft.id === 'chat' || draft.id === 'claw' ? (
+              // 内置预设：名称与系统提示词直接隐藏
+              <></>
+            ) : (
+              <>
+                <input
+                  value={draft.name}
+                  onChange={(e) => updateDraft({ name: e.target.value })}
+                  placeholder="名称"
+                  className={INPUT_CLS}
+                />
+                <textarea
+                  value={draft.systemPrompt}
+                  onChange={(e) => updateDraft({ systemPrompt: e.target.value })}
+                  placeholder="系统提示词"
+                  rows={3}
+                  className={`${INPUT_CLS} resize-none`}
+                />
+              </>
+            )}
+            {/* 服务商快捷选择：自动填充端点与模型 */}
+            <div className="flex flex-wrap gap-1">
+              {PROVIDERS.map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => applyProvider(p)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] transition-colors ${
+                    detectProvider(draft.baseUrl)?.key === p.key
+                      ? 'neon-accent'
+                      : 'bg-white/5 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
             <div className="flex gap-2">
               <input
                 value={draft.baseUrl}
@@ -269,12 +307,14 @@ export default function SettingsScreen() {
               >
                 {aiSaved ? '已保存' : '保存智能体'}
               </button>
-              <button
-                onClick={removeAgent}
-                className="rounded-xl bg-white/5 px-4 py-2 text-[13px] text-zinc-400 transition-colors hover:bg-red-500/15 hover:text-red-400"
-              >
-                删除
-              </button>
+              {draft.id !== 'chat' && draft.id !== 'claw' && (
+                <button
+                  onClick={removeAgent}
+                  className="rounded-xl bg-white/5 px-4 py-2 text-[13px] text-zinc-400 transition-colors hover:bg-red-500/15 hover:text-red-400"
+                >
+                  删除
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -319,6 +359,28 @@ export default function SettingsScreen() {
           <span
             className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${
               autostart ? 'left-6' : 'left-1'
+            }`}
+          />
+        </button>
+      </div>
+
+      {/* 闲置自动隐藏 */}
+      <div className="flex items-center justify-between rounded-2xl bg-island-card px-4 py-3">
+        <div>
+          <div className="text-[14px] text-island">闲置自动隐藏</div>
+          <div className="text-[12px] text-sub">3 分钟无操作时完全隐藏，鼠标移到屏幕顶端恢复</div>
+        </div>
+        <button
+          onClick={toggleAutoHide}
+          role="switch"
+          aria-checked={autoHide}
+          className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
+            autoHide ? 'bg-[#22d3ee]' : 'bg-white/10'
+          }`}
+        >
+          <span
+            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${
+              autoHide ? 'left-6' : 'left-1'
             }`}
           />
         </button>
@@ -383,7 +445,7 @@ export default function SettingsScreen() {
             <div className="text-[14px] text-island">软件更新</div>
             <div className="text-[12px] text-sub">自动检测 GitHub 上的新版本</div>
           </div>
-          <span className="text-[11px] text-zinc-500">当前 v1.1.1</span>
+          <span className="text-[11px] text-zinc-500">当前 v1.2.0</span>
         </div>
 
         <div className="mt-2 flex items-center gap-2">
@@ -462,7 +524,7 @@ export default function SettingsScreen() {
       <div className="rounded-2xl bg-island-card px-4 py-3">
         <div className="text-[14px] text-island">关于</div>
         <div className="mt-1 space-y-0.5 text-[12px] text-zinc-500">
-          <div>PC Dynamic Island v1.1.1 · Electron + React</div>
+          <div>PC Dynamic Island v1.2.0 · Electron + React</div>
           <button onClick={openWebsite} className="block text-island transition-colors hover:text-island-accent">
             作者：白依沚梦 · byzmovo.cn ↗
           </button>

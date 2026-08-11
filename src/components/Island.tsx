@@ -146,7 +146,7 @@ export default function Island({
           mode === 'notch' ? 'top-0' : 'top-1/2 -translate-y-1/2'
         } ${expanded ? '' : 'pointer-events-none'}`}
         style={{
-          width: 520,
+          width: 600,
           height: expanded ? 448 : mode === 'notch' ? 44 : 48,
           opacity: expanded ? 1 : 0,
           borderRadius: mode === 'notch' ? '0 0 26px 26px' : '26px',

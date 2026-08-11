@@ -106,14 +106,14 @@ export const PROVIDERS: ProviderInfo[] = [
     key: 'moonshot',
     name: 'Moonshot (Kimi)',
     defaultUrl: 'https://api.moonshot.cn/v1',
-    model: 'moonshot-v1-8k',
+    model: 'kimi-latest',
     systemPrompt: '你是 Kimi，由 Moonshot AI 提供，请用简洁、友好的中文回答。'
   },
   {
     key: 'zhipu',
     name: '智谱 GLM',
     defaultUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    model: 'glm-4-flash',
+    model: 'glm-4-plus',
     systemPrompt: '你是智谱清言 AI，请用简洁、友好的中文回答。'
   },
   {
@@ -136,6 +136,27 @@ export const PROVIDERS: ProviderInfo[] = [
     defaultUrl: 'https://openrouter.ai/api/v1',
     model: 'deepseek/deepseek-chat',
     systemPrompt: 'You are a helpful assistant. Reply in Chinese unless asked otherwise.'
+  },
+  {
+    key: 'xiaomi',
+    name: '小米 MiMo',
+    defaultUrl: 'https://api.xiaomimimo.com/v1',
+    model: 'MiMo-7B-RL',
+    systemPrompt: '你是小米 MiMo AI，请用简洁、自然的中文回答。'
+  },
+  {
+    key: 'volcengine',
+    name: '豆包 / 火山引擎',
+    defaultUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    model: 'doubao-pro-32k',
+    systemPrompt: '你是豆包，由字节跳动提供，请用简洁、自然的中文回答。'
+  },
+  {
+    key: 'groq',
+    name: 'Groq',
+    defaultUrl: 'https://api.groq.com/openai/v1',
+    model: 'llama-3.3-70b-versatile',
+    systemPrompt: 'You are a helpful assistant. Reply in Chinese unless asked otherwise.'
   }
 ]
 
@@ -144,6 +165,9 @@ export function detectProvider(url: string): ProviderInfo | null {
   const u = (url || '').toLowerCase().trim()
   if (!u) return null
   const find = (k: string) => PROVIDERS.find((p) => p.key === k) ?? null
+  if (u.includes('xiaomimimo') || u.includes('mimo')) return find('xiaomi')
+  if (u.includes('volces') || u.includes('ark') || u.includes('doubao')) return find('volcengine')
+  if (u.includes('groq')) return find('groq')
   if (u.includes('11434') || u.includes('ollama')) return find('ollama')
   if (u.includes('deepseek')) return find('deepseek')
   if (u.includes('moonshot') || u.includes('kimi')) return find('moonshot')

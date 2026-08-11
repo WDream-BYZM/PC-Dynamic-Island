@@ -30,7 +30,7 @@ interface AiMessage {
 const COLLAPSED_HEIGHT = 84
 
 /** 展开态窗口尺寸（面板 + 霓虹光晕边距） */
-const EXPANDED_WIDTH = 556
+const EXPANDED_WIDTH = 636
 const EXPANDED_HEIGHT = 484
 
 /** 刘海模式折叠窗口高度（贴屏顶） */
@@ -45,6 +45,14 @@ let mode: 'island' | 'notch' = 'island'
 let expanded = false
 /** 折叠态胶囊宽度，由渲染层按活动类型分档后通过 IPC 驱动（窗口宽 = 胶囊宽 + 光晕边距） */
 let collapsedCapsuleW = 204
+
+/** 闲置自动隐藏：开启后 3 分钟无操作缩到屏幕顶端（完全隐藏，不露小条） */
+let autoHide = false
+let docked = false
+let lastActive = Date.now()
+let autoHideTimer: ReturnType<typeof setInterval> | null = null
+const AUTO_HIDE_MS = 3 * 60 * 1000
+const AUTO_HIDE_PEEK = 0
 
 function topCenterPos(width: number, height: number) {
   const { workArea } = screen.getPrimaryDisplay()
@@ -153,6 +161,68 @@ function createWindow() {
   })
 }
 
+// ---------------- 闲置自动隐藏 ----------------
+
+/** 缩到屏幕顶端：窗口上移，只露出底部几像素 */
+function dockWindow() {
+  if (docked || !mainWindow || mainWindow.isDestroyed()) return
+  const { workArea } = screen.getPrimaryDisplay()
+  const b = mainWindow.getBounds()
+  mainWindow.setBounds({
+    x: b.x,
+    y: workArea.y - (b.height - AUTO_HIDE_PEEK),
+    width: b.width,
+    height: b.height
+  })
+  docked = true
+  console.log('[eisland] docked (auto-hide)')
+}
+
+/** 恢复到屏幕顶部的正常位置 */
+function undockWindow() {
+  if (!docked || !mainWindow || mainWindow.isDestroyed()) return
+  const { workArea } = screen.getPrimaryDisplay()
+  const b = mainWindow.getBounds()
+  const y = mode === 'notch' ? workArea.y : workArea.y + 14
+  mainWindow.setBounds({ x: b.x, y, width: b.width, height: b.height })
+  docked = false
+  console.log('[eisland] undocked')
+}
+
+/** 每秒检查：鼠标在窗口内=活动（刷新计时）；否则超时则隐藏。隐藏后鼠标移到屏幕顶端热区即恢复 */
+function activityTick() {
+  if (!mainWindow || mainWindow.isDestroyed() || !autoHide) return
+  const { workArea } = screen.getPrimaryDisplay()
+  const p = screen.getCursorScreenPoint()
+  if (docked) {
+    // 完全隐藏后：鼠标扫过屏幕顶端（顶部 ~10px）即恢复
+    if (p.y < workArea.y + 10) undockWindow()
+    return
+  }
+  const b = mainWindow.getBounds()
+  const inside = p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height
+  if (inside) {
+    lastActive = Date.now()
+  } else if (!expanded && Date.now() - lastActive > AUTO_HIDE_MS) {
+    dockWindow()
+  }
+}
+
+function setAutoHideEnabled(enabled: boolean) {
+  autoHide = enabled
+  lastActive = Date.now()
+  if (enabled) {
+    if (docked) undockWindow()
+    if (!autoHideTimer) autoHideTimer = setInterval(activityTick, 1000)
+  } else {
+    if (autoHideTimer) {
+      clearInterval(autoHideTimer)
+      autoHideTimer = null
+    }
+    if (docked) undockWindow()
+  }
+}
+
 // ---------------- 系统状态采样 ----------------
 
 let lastCpus = os.cpus()
@@ -198,6 +268,7 @@ ipcMain.on('island:quit', () => app.quit())
 /** 折叠/展开时调整窗口尺寸：窗口贴合内容，消除方形背景 */
 ipcMain.on('island:set-state', (_event, exp: boolean) => {
   expanded = exp
+  if (exp && docked) undockWindow()
   applySize()
 })
 
@@ -213,6 +284,11 @@ ipcMain.on('island:set-activity', (_event, w: number) => {
 ipcMain.on('island:set-mode', (_event, m: string) => {
   mode = m === 'notch' ? 'notch' : 'island'
   console.log('[eisland] mode ->', mode)
+})
+
+/** 闲置自动隐藏开关（渲染层偏好） */
+ipcMain.on('island:set-autohide', (_event, enabled: boolean) => {
+  setAutoHideEnabled(!!enabled)
 })
 
 /** 读取系统剪贴板文本（用于安全捕获复制的消息） */

@@ -114,6 +114,12 @@ export default function App() {
     }
   }, [])
 
+  // 启动时同步「闲置自动隐藏」偏好给主进程
+  useEffect(() => {
+    const v = localStorage.getItem('eisland.autoHide') === 'true'
+    window.eisland?.setAutoHide(v)
+  }, [])
+
   // 本地网易云音乐：常驻轮询，播放时上岛显示当前歌曲
   useEffect(() => {
     refreshMusic()

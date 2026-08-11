@@ -95,6 +95,7 @@ export interface EislandAPI {
   installUpdate: () => Promise<void>
   onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void
+  setAutoHide: (enabled: boolean) => void
   platform: string
 }
 

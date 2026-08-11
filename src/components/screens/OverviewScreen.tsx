@@ -28,7 +28,12 @@ export default function OverviewScreen() {
 
   return (
     <div className="relative flex h-full flex-col items-center justify-center overflow-hidden">
-      <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-80 -translate-x-1/2 rounded-full bg-[#22d3ee]/10 blur-[80px]" />
+      {/* 霓虹微光背景：青 / 品红 / 紫三色光晕叠加 */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-24 left-1/4 h-52 w-64 -translate-x-1/2 rounded-full bg-[#22d3ee]/10 blur-[80px]" />
+        <div className="absolute -top-16 right-1/4 h-52 w-64 translate-x-1/2 rounded-full bg-[#e879f9]/10 blur-[80px]" />
+        <div className="absolute -bottom-8 left-1/2 h-48 w-72 -translate-x-1/2 rounded-full bg-[#a78bfa]/10 blur-[90px]" />
+      </div>
 
       <div className="text-[13px] tracking-[0.35em] text-zinc-400">{greeting(now.getHours())}</div>
 

@@ -154,6 +154,8 @@ const api = {
       ipcRenderer.removeListener('update:progress', handler)
     }
   },
+  /** 闲置自动隐藏：开关（主进程据此缩到顶部/恢复） */
+  setAutoHide: (enabled: boolean) => ipcRenderer.send('island:set-autohide', enabled),
   platform: process.platform
 }
 

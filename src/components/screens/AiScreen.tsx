@@ -6,8 +6,13 @@ import { loadHistory, saveHistory } from '../../lib/chatHistory'
 
 export default function AiScreen({ onGoSettings }: { onGoSettings: () => void }) {
   const [agents] = useState<AgentConfig[]>(() => loadAgents())
-  const [activeId, setActiveId] = useState(() => getActiveAgentId())
-  const [messages, setMessages] = useState<ChatMessage[]>(() => loadHistory(getActiveAgentId()))
+  // 已配置 API Key 的智能体（仅这些可用于 AI 对话）
+  const configured = agents.filter((a) => a.apiKey.trim().length > 0)
+  const [activeId, setActiveId] = useState<string>(() => {
+    const saved = getActiveAgentId()
+    return configured.some((a) => a.id === saved) ? saved : configured[0]?.id ?? saved
+  })
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadHistory(activeId))
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -27,12 +32,11 @@ export default function AiScreen({ onGoSettings }: { onGoSettings: () => void })
   useEffect(() => {
     clearActivity('ai')
   }, [])
-  // 仅统计已配置 API Key 的智能体：未配置任何 Key 时 AI 功能默认不启用
-  const configuredAgents = agents.filter((a) => a.apiKey.trim().length > 0)
-  const hasConfigured = configuredAgents.length > 0
+  // 未配置任何 Key 时 AI 功能默认不启用
+  const hasConfigured = configured.length > 0
   const active =
-    agents.find((a) => a.id === activeId && a.apiKey.trim().length > 0) ??
-    configuredAgents[0] ??
+    configured.find((a) => a.id === activeId) ??
+    configured[0] ??
     agents[0]
 
   useEffect(() => {
@@ -130,19 +134,26 @@ export default function AiScreen({ onGoSettings }: { onGoSettings: () => void })
     <div className="flex h-full flex-col">
       {/* agent 选择器 */}
       <div className="flex items-center gap-1.5 overflow-x-auto px-4 pb-2 pt-3">
-        {agents.map((a) => (
+        {configured.map((a) => (
           <button
             key={a.id}
             onClick={() => switchAgent(a.id)}
             className={`shrink-0 rounded-full px-3 py-1 text-[12px] transition-colors ${
               active?.id === a.id
-                  ? 'neon-accent'
+                ? 'neon-accent'
                 : 'bg-white/5 text-zinc-400 hover:text-zinc-200'
             }`}
           >
+            <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400/90 align-middle" />
             {a.name}
           </button>
         ))}
+        <button
+          onClick={onGoSettings}
+          className="shrink-0 rounded-full border border-dashed border-white/15 px-3 py-1 text-[12px] text-zinc-500 transition-colors hover:border-island-accent/40 hover:text-zinc-300"
+        >
+          + 配置
+        </button>
       </div>
 
       {/* 消息列表 */}
