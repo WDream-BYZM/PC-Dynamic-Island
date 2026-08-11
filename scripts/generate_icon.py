@@ -81,16 +81,23 @@ def glow_layer(ring, blur_radius, strength):
 
 
 def main():
-    # 纯黑底
-    base = Image.new('RGBA', (S, S), (*BG, 255))
+    # 透明底（圆角外透明，Windows 上显示为圆角图标）
+    base = Image.new('RGBA', (S, S), (0, 0, 0, 0))
 
-    # ---- 1. 外框：青→品红霓虹描边 + 柔和光晕 ----
+    # ---- 1. 外框：大圆角深色底 + 青→品红霓虹描边 + 柔和光晕 ----
     fx, fy = 26, 26
-    frame = neon_ring((S - 52, S - 52), 56, 18, CYAN, PINK)
-    base = blend_additive(base, glow_layer(frame, 22, 2.6), fx, fy)   # 大范围柔光
-    base = blend_additive(base, frame, fx, fy)                        # 清晰描边（加色更亮）
-    # 内部深色填充（盖住中间，形成边框）
-    inner = rounded_rect_filled((S - 52 - 38, S - 52 - 38), 44, DARK)
+    fw, fh = S - 52, S - 52
+    corner = 96  # 大圆角（约 19%），更圆润
+    frame = neon_ring((fw, fh), corner, 18, CYAN, PINK)
+
+    # 光晕（柔和，圆角外轻微溢出）
+    base.alpha_composite(glow_layer(frame, 22, 2.2), (fx, fy))
+    # 深色圆角底（圆角外透明）
+    base.alpha_composite(rounded_rect_filled((fw, fh), corner, DARK), (fx, fy))
+    # 霓虹描边
+    base.alpha_composite(frame, (fx, fy))
+    # 内部更深的圆角层（突出描边厚度）
+    inner = rounded_rect_filled((fw - 38, fh - 38), corner - 19, (10, 10, 13, 255))
     base.alpha_composite(inner, (fx + 19, fy + 19))
 
     # ---- 2. 中央胶囊：深色内部 + 青→粉霓虹描边 + 光晕 ----
@@ -132,7 +139,7 @@ def main():
     os.makedirs('build', exist_ok=True)
     png_path = 'build/icon.png'
     ico_path = 'build/icon.ico'
-    base.convert('RGB').save(png_path, 'PNG')
+    base.save(png_path, 'PNG')  # 保留 alpha，圆角外透明
     base.save(ico_path, 'ICO', sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     print(f'OK -> {png_path}, {ico_path}')
 
