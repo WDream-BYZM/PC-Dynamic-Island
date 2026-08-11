@@ -14,7 +14,7 @@
 #        保证应用内 electron-updater 自动更新能正确下载。
 # ============================================================================
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 
 # 切到项目根目录（脚本所在目录的上一级）
 Set-Location (Split-Path -Parent $PSScriptRoot)
@@ -59,7 +59,9 @@ Copy-Item $mapSpace $mapSafe -Force
 
 # ---------- 3. 检查 Release 是否已存在 ----------
 Write-Host "[3/4] 检查 GitHub 上是否已存在 $tag ..." -ForegroundColor Cyan
-if (gh release view $tag *> $null) {
+gh release view $tag *> $null
+$releaseExists = ($LASTEXITCODE -eq 0)
+if ($releaseExists) {
   Write-Host "警告: Release $tag 已存在！" -ForegroundColor Yellow
   Write-Host "  如需更新资产:      gh release upload $tag $exeSafe $mapSafe $latestYml --clobber"
   Write-Host "  如需删除后重建:    gh release delete $tag --yes"
