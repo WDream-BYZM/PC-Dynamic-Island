@@ -107,11 +107,8 @@ export default function Island({
             glow ? 'neon-ring neon-frame neon-glow' : ''
           } ${expanded ? 'pointer-events-none scale-90 opacity-0' : 'opacity-100'}`}
         >
-          {/* 时间常驻显示 */}
-          {/* CPU 圆环：绝对定位左侧，只移动圆环，不影响时间/活动居中 */}
-          <span className="absolute left-[24px] top-1/2 -translate-y-1/2">
-            <CpuRing percent={cpu} />
-          </span>
+          {/* CPU 圆环 + 时间：同处 flex 流，并排居中，避免重叠 */}
+          <CpuRing percent={cpu} />
           <span className="text-[15px] font-semibold tabular-nums tracking-wide text-island">
             {hh}:{mm}
           </span>

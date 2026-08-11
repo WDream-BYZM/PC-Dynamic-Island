@@ -12,7 +12,7 @@ Click the black capsule at the top center to expand it into a large panel; when 
 
 **Windows x64**（NSIS 安装包，约 80 MB）· NSIS installer (~80 MB)
 
-- [⬇️ 下载最新版 · Download latest](https://github.com/WDream-BYZM/PC-Dynamic-Island/releases/latest/download/PC-Dynamic-Island-Setup-1.2.0.exe)
+- [⬇️ 下载最新版 · Download latest](https://github.com/WDream-BYZM/PC-Dynamic-Island/releases/latest/download/PC-Dynamic-Island-Setup-1.2.1.exe)
 - [📦 所有版本 · All releases](https://github.com/WDream-BYZM/PC-Dynamic-Island/releases)
 
 > 安装后常驻任务栏顶部中央，点击胶囊展开、按 `Esc` 或点击外部收起。
