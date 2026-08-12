@@ -1,7 +1,7 @@
 {
   "name": "pc-dynamic-island",
   "productName": "PC Dynamic Island",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Dynamic Island-style desktop app for Windows, built with Electron + React + TypeScript",
   "main": "dist-electron/main.js",
   "author": "vibecoding",

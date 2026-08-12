@@ -157,14 +157,21 @@ export const PROVIDERS: ProviderInfo[] = [
     defaultUrl: 'https://api.groq.com/openai/v1',
     model: 'llama-3.3-70b-versatile',
     systemPrompt: 'You are a helpful assistant. Reply in Chinese unless asked otherwise.'
+  },
+  {
+    key: 'custom',
+    name: '自定义',
+    defaultUrl: '',
+    model: '',
+    systemPrompt: ''
   }
 ]
 
-/** 根据 API 端点识别服务商类型 */
+/** 根据 API 端点识别服务商类型；空/未识别均视为自定义 */
 export function detectProvider(url: string): ProviderInfo | null {
   const u = (url || '').toLowerCase().trim()
-  if (!u) return null
   const find = (k: string) => PROVIDERS.find((p) => p.key === k) ?? null
+  if (!u) return find('custom')
   if (u.includes('xiaomimimo') || u.includes('mimo')) return find('xiaomi')
   if (u.includes('volces') || u.includes('ark') || u.includes('doubao')) return find('volcengine')
   if (u.includes('groq')) return find('groq')
@@ -176,5 +183,6 @@ export function detectProvider(url: string): ProviderInfo | null {
   if (u.includes('dashscope') || u.includes('aliyun')) return find('dashscope')
   if (u.includes('openrouter')) return find('openrouter')
   if (u.includes('openai')) return find('openai')
-  return null
+  // 未匹配任何已知服务商 → 视为自定义（自由填写端点/模型）
+  return find('custom')
 }

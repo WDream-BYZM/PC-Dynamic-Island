@@ -1,5 +1,4 @@
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, powerMonitor, screen, session, shell } from 'electron'
-import { autoUpdater } from 'electron-updater'
 import { execFile, execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
@@ -10,6 +9,26 @@ import path from 'node:path'
 // 会导致透明区域被渲染成实色（黑色/白色方形背景）。
 // 禁用硬件加速是此问题的标准解决方案（灵动岛为轻量 UI，性能影响可忽略）。
 app.disableHardwareAcceleration()
+
+// ---------- 内存优化：精简 Chromium 进程与堆 ----------
+// 单窗口轻量 UI，无需 Chromium 预分配的备用渲染进程（可省 ~40MB）
+// CalculateNativeWinOcclusion=省去 Windows 原生窗口遮挡检测；FontSrcLocalMatching=省字体匹配内存
+// NetworkPrediction/AutofillServerCommunication=禁网络预取与自动填充遥测；Translate/MediaRouter/OptimizationGuideModelDownloading=禁翻译/投屏/模型下载等无关服务
+app.commandLine.appendSwitch(
+  'disable-features',
+  'SpareRendererForSitePerProcess,CalculateNativeWinOcclusion,FontSrcLocalMatching,NetworkPrediction,AutofillServerCommunication,Translate,MediaRouter,OptimizationGuideModelDownloading,AudioServiceOutOfProcess'
+)
+// GPU 进程合入主进程（透明窗口已走软件合成，无需独立 GPU 进程，省一个进程的基础内存）
+app.commandLine.appendSwitch('in-process-gpu')
+// 禁用软件光栅与 GPU 合成，避免额外合成进程常驻内存
+app.commandLine.appendSwitch('disable-software-rasterizer')
+app.commandLine.appendSwitch('disable-gpu-compositing')
+// 关闭后台网络（遥测等）与自动下载
+app.commandLine.appendSwitch('disable-background-networking')
+// 限制 V8 老生代堆上限（轻量 UI 80MB 足够）+ 暴露 GC，配合下方定时回收防止长驻堆缓慢膨胀
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=80 --max-semi-space-size=6 --expose-gc')
+
+// 主进程定时回收未用堆内存（Electron 主进程无法运行时开启 expose-gc，此调用为空操作，保留无害）
 
 interface AiAgent {
   id: string
@@ -1022,6 +1041,13 @@ function ensureFirstRunAutostart() {
 
 // ---------------- 自动更新 (electron-updater) ----------------
 
+/** electron-updater 延迟加载：仅在需要检查/操作更新时才加载，降低常驻内存 */
+let updaterModule: typeof import('electron-updater') | null = null
+function getUpdater(): typeof import('electron-updater') {
+  if (!updaterModule) updaterModule = require('electron-updater') as typeof import('electron-updater')
+  return updaterModule
+}
+
 /** 主进程 → 渲染层：发送更新状态 / 进度 */
 function sendUpdate(channel: string, payload: unknown) {
   mainWindow?.webContents.send(channel, payload)
@@ -1030,6 +1056,7 @@ function sendUpdate(channel: string, payload: unknown) {
 function setupAutoUpdater() {
   // 开发模式（未打包）不做更新检查
   if (!app.isPackaged) return
+  const { autoUpdater } = getUpdater()
 
   autoUpdater.autoDownload = false // 先通知渲染层，由用户决定是否下载
   autoUpdater.autoInstallOnAppQuit = true // 下载完成后，退出应用时自动安装
@@ -1069,20 +1096,20 @@ function setupAutoUpdater() {
 /** 手动检查更新 */
 ipcMain.handle('update:check', () => {
   if (!app.isPackaged) return { state: 'not-available' }
-  return autoUpdater.checkForUpdates()
+  return getUpdater().autoUpdater.checkForUpdates()
 })
 
 /** 下载更新 */
 ipcMain.handle('update:download', () => {
   if (!app.isPackaged) return
-  return autoUpdater.downloadUpdate()
+  return getUpdater().autoUpdater.downloadUpdate()
 })
 
 /** 立即安装并重启 */
 ipcMain.handle('update:install', () => {
   if (!app.isPackaged) return
   setImmediate(() => {
-    autoUpdater.quitAndInstall(false, true)
+    getUpdater().autoUpdater.quitAndInstall(false, true)
   })
 })
 

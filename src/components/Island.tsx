@@ -3,7 +3,6 @@ import CpuRing from './CpuRing'
 import MusicVisualizer from './MusicVisualizer'
 import { setActivity, useIslandActivity, capsuleWidth } from '../lib/activity'
 import { useStore } from '../lib/store'
-import { musicStore } from '../lib/music'
 import { audioActivity } from '../lib/audioActivity'
 import { weatherStore } from '../lib/weather'
 import OverviewScreen from './screens/OverviewScreen'
@@ -72,7 +71,6 @@ export default function Island({
 }: IslandProps) {
   const activity = useIslandActivity()
   const weather = useStore(weatherStore)
-  const music = useStore(musicStore)
   const audio = useStore(audioActivity)
   const now = new Date()
   const hh = String(now.getHours()).padStart(2, '0')
@@ -120,6 +118,8 @@ export default function Island({
   // 折叠态网速：每 1.5s 采样，显示在胶囊右侧
   const [net, setNet] = useState<{ rxBps: number; txBps: number }>({ rxBps: 0, txBps: 0 })
   useEffect(() => {
+    // 展开时胶囊隐藏（网速不可见），暂停网速轮询省资源
+    if (expanded) return
     let alive = true
     const tick = async () => {
       try {
@@ -135,7 +135,7 @@ export default function Island({
       alive = false
       clearInterval(id)
     }
-  }, [])
+  }, [expanded])
 
   return (
     <div className="absolute inset-0">
@@ -159,7 +159,7 @@ export default function Island({
             glow ? 'neon-ring neon-frame neon-glow' : ''
           } ${expanded ? 'pointer-events-none scale-90 opacity-0' : 'opacity-100'}`}
         >
-          {music && (audio.isPlaying || !audio.analyser) && <MusicVisualizer />}
+          {audio.isPlaying && <MusicVisualizer />}
           {/* CPU 圆环 + 时间：同处 flex 流，并排居中，避免重叠 */}
           <CpuRing percent={cpu} />
           <span className="text-[15px] font-semibold tabular-nums tracking-wide text-island">

@@ -167,7 +167,7 @@ export default function App() {
   // 本地网易云音乐：常驻轮询，播放时上岛显示当前歌曲
   useEffect(() => {
     refreshMusic()
-    const id = setInterval(refreshMusic, 2000)
+    const id = setInterval(refreshMusic, 4000)
     return () => clearInterval(id)
   }, [])
 

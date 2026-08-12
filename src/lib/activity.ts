@@ -70,8 +70,8 @@ export function useIslandActivity(): IslandActivity | null {
   if (timer.swRunning || timer.swElapsed > 0) {
     return { type: 'timer', title: formatTime(timer.swElapsed), subtitle: '正计时', icon: '⏱️', target: 'timer' }
   }
-  // 音频捕获成功时按播放状态显示；捕获失败（analyser 为空）则降级为始终显示，避免识别失效
-  if (music && (audio.isPlaying || !audio.analyser)) {
+  // 检测到真实音频输出时才上岛显示音乐（避免未播放时误显示，不再用捕获失败降级）
+  if (music && audio.isPlaying) {
     return { type: 'music', title: music.title, subtitle: music.artist || undefined, icon: '🎵' }
   }
   return temp

@@ -53,7 +53,9 @@ export function ensureAudioCapture() {
             audioActivity.set({ analyser, isPlaying: false })
           }, 5000)
         }
-        requestAnimationFrame(check)
+        // 播放中：全速采样供频谱绘制；未播放：降到低频检测（省 CPU，仅用于监听是否有声音恢复）
+        if (audioActivity.get().isPlaying) requestAnimationFrame(check)
+        else setTimeout(check, 500)
       }
       check()
     } catch {

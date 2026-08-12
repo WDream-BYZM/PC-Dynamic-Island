@@ -20,7 +20,17 @@ export default function OverviewScreen() {
   const [now, setNow] = useState(() => new Date())
   const music = useStore(musicStore)
   const audio = useStore(audioActivity)
-  const mediaControl = (action: 'prev' | 'toggle' | 'next') => window.eisland?.musicControl(action)
+  // 乐观播放状态：点击按钮立即反馈（null=跟随真实音频检测 audio.isPlaying）
+  const [uiPlaying, setUiPlaying] = useState<boolean | null>(null)
+  const effectivePlaying = uiPlaying ?? audio.isPlaying
+  useEffect(() => {
+    // 真实音频检测确认了乐观状态后，交回真实状态接管（避免一直停在乐观值）
+    if (uiPlaying !== null && audio.isPlaying === uiPlaying) setUiPlaying(null)
+  }, [audio.isPlaying, uiPlaying])
+  const mediaControl = (action: 'prev' | 'toggle' | 'next') => {
+    if (action === 'toggle') setUiPlaying(!effectivePlaying)
+    window.eisland?.musicControl(action)
+  }
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000)
@@ -41,7 +51,8 @@ export default function OverviewScreen() {
         <div className="absolute -top-16 right-1/4 h-52 w-64 translate-x-1/2 rounded-full bg-[#e879f9]/10 blur-[80px]" />
         <div className="absolute -bottom-8 left-1/2 h-48 w-72 -translate-x-1/2 rounded-full bg-[#a78bfa]/10 blur-[90px]" />
       </div>
-      {music && (audio.isPlaying || !audio.analyser) && <MusicVisualizer />}
+      {/* 识别到真实音频播放时显示频谱 */}
+      {audio.isPlaying && <MusicVisualizer />}
 
       {/* 主内容区：在剩余空间中垂直居中，不受底部音乐控制挤压 */}
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center">
@@ -66,8 +77,8 @@ export default function OverviewScreen() {
         </div>
       </div>
 
-      {/* 底部音乐控制 */}
-      {music && (audio.isPlaying || !audio.analyser) && (
+      {/* 底部音乐控制：后台检测到音乐播放器就常驻显示（不要求正在播放） */}
+      {music && (
         <div className="relative z-10 flex w-full items-center justify-between gap-3 px-6 pb-5 pt-2">
           <div className="min-w-0 flex-1">
             <div className="truncate text-[13px] text-white">{music.title}</div>
@@ -88,8 +99,8 @@ export default function OverviewScreen() {
               className="neon-accent grid h-10 w-10 place-items-center rounded-full"
               aria-label="播放/暂停"
             >
-              {/* 图标由真实音频检测驱动：有声音=暂停钮（点击暂停），无声音=播放钮（点击播放） */}
-              {audio.isPlaying ? (
+              {/* 图标由真实音频检测 + 乐观点击共同驱动：有声音/刚点播放=暂停钮，无声音/刚点暂停=播放钮 */}
+              {effectivePlaying ? (
                 <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
                   <rect x="3.5" y="2.5" width="3.5" height="11" rx="1" />
                   <rect x="9" y="2.5" width="3.5" height="11" rx="1" />

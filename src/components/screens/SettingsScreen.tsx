@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AgentConfig } from '../../types'
-import { loadAgents, newAgentId, saveAgents, PROVIDERS, detectProvider, type ProviderInfo } from '../../lib/agents'
+import { loadAgents, saveAgents, PROVIDERS, detectProvider, type ProviderInfo } from '../../lib/agents'
 
 const INPUT_CLS =
   'min-w-0 flex-1 rounded-xl border border-island-line bg-island-card px-3 py-2 text-[13px] text-white outline-none placeholder:text-zinc-600 focus:border-island-accent/50'
@@ -133,32 +133,18 @@ export default function SettingsScreen() {
     }
   }
 
-  const addAgent = () => {
-    const a: AgentConfig = {
-      id: newAgentId(),
-      name: '新智能体',
-      description: '自定义智能体',
-      systemPrompt: '你是一个乐于助人的 AI 助手。',
-      baseUrl: 'https://api.deepseek.com/v1',
-      apiKey: '',
-      model: 'deepseek-chat',
-      temperature: 0.7
-    }
-    const list = [...agents, a]
-    setAgents(list)
-    saveAgents(list)
-    setEditingId(a.id)
-    setDraft({ ...a })
-  }
-
   const updateDraft = (patch: Partial<AgentConfig>) => {
     if (!draft) return
     setDraft({ ...draft, ...patch })
   }
 
-  // 选择服务商：自动填充 API 端点和模型
+  // 选择服务商：自动填充 API 端点和模型；自定义则清空由用户自行填写
   const applyProvider = (p: ProviderInfo) => {
     if (!draft) return
+    if (p.key === 'custom') {
+      updateDraft({ baseUrl: '', model: '' })
+      return
+    }
     updateDraft({ baseUrl: p.defaultUrl, model: p.model })
   }
 
@@ -206,9 +192,6 @@ export default function SettingsScreen() {
       <div>
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[12px] tracking-widest text-zinc-500">AI 智能体</span>
-          <button onClick={addAgent} className="text-[12px] text-island-accent hover:underline">
-            + 新增
-          </button>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {agents.map((a) => (
